@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>دفتر الحسابات</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--tx:#1b2330;--mu:#6b7686;--bd:#e3e7ee;--pr:#0f766e;--prt:#fff;--rd:#b42318;--gn:#067647;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1419;--card:#181f27;--tx:#e8edf3;--mu:#98a3b3;--bd:#2a3440;--pr:#2dd4bf;--prt:#06231f;--rd:#f97066;--gn:#47cd89;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1419;--card:#181f27;--tx:#e8edf3;--mu:#98a3b3;--bd:#2a3440;--pr:#2dd4bf;--prt:#06231f;--rd:#f97066;--gn:#47cd89;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.6 "Segoe UI",Tahoma,"Noto Naskh Arabic",system-ui,sans-serif}
+header{background:var(--pr);color:var(--prt);padding:14px 16px;font-size:18px;font-weight:700}
+nav{display:flex;gap:6px;padding:10px 12px;overflow-x:auto;background:var(--card);border-bottom:1px solid var(--bd);position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+nav button{white-space:nowrap;border:0;background:none;color:var(--mu);padding:8px 14px;border-radius:8px;font:inherit;cursor:pointer}
+nav button.on{background:var(--pr);color:var(--prt);font-weight:700}
+main{max-width:1000px;margin:0 auto;padding:14px}
+.bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap}
+h2,h3{margin:0}
+button{font:inherit;cursor:pointer;border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:6px 12px;border-radius:8px}
+button.pri{background:var(--pr);color:var(--prt);border-color:var(--pr);font-weight:700}
+button.dng{color:var(--rd)}button.pri.dng{background:var(--rd);color:#fff;border-color:var(--rd)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px}
+.c small{color:var(--mu);display:block}.c b{font-size:20px}
+.c.big{background:var(--pr);color:var(--prt);border-color:var(--pr)}.c.big small{color:inherit;opacity:.85}
+.w{overflow-x:auto;background:var(--card);border:1px solid var(--bd);border-radius:12px;margin-bottom:16px}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th,td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--bd);white-space:nowrap}
+th{color:var(--mu);font-weight:600;font-size:13px}
+td .a{display:flex;gap:4px}td .a button{padding:3px 8px;font-size:13px}
+.pos{color:var(--gn)}.neg{color:var(--rd)}.mu{color:var(--mu)}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:flex-start;justify-content:center;padding:20px 10px;overflow:auto;z-index:20}
+.box{background:var(--card);color:var(--tx);border-radius:14px;padding:16px;width:100%;max-width:560px}
+.box h3{margin-bottom:12px}
+label{display:block;margin-bottom:10px;font-size:13px;color:var(--mu)}
+input,select{display:block;width:100%;padding:8px;margin-top:3px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+.row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.g4{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center}
+.it input,.it select{margin:0}
+.tot{background:var(--bg);border-radius:8px;padding:10px;margin-top:8px}
+.tot div{display:flex;justify-content:space-between}
+.warn{color:var(--rd);font-size:13px}
+#toast{padding:30px;text-align:center;color:var(--mu)}
+@media print{body>*:not(#m){display:none!important}.ov{position:static;background:none;padding:0;display:block!important}.noprint{display:none!important}.box{max-width:none}}
+</style>
+</head>
+<body>
+<header style="display:flex;justify-content:space-between;align-items:center"><span>📒 دفتر الحسابات</span><span style="font-size:13px;font-weight:400"><span id="st"></span> <button id="lo" style="display:none" onclick="sb.auth.signOut().then(()=>location.reload())">خروج</button></span></header>
+<nav id="nav"></nav>
+<main id="v"></main>
+<div class="ov" id="m"><div class="box" id="mb"></div></div>
+<datalist id="pl"></datalist>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+const $=s=>document.querySelector(s);
+let S={sup:[],cus:[],pur:[],inv:[],pay:[],seq:1};
+const CFG=window.LEDGER_CONFIG||{};
+const sb=window.supabase&&CFG.url&&!CFG.url.includes("YOUR")?window.supabase.createClient(CFG.url,CFG.key):null;
+let user=null,tm=null;
+const stat=t=>{const e=$("#st");if(e)e.textContent=t};
+async function push(){if(!sb||!user)return;stat("جاري الحفظ…");
+ const{error}=await sb.from("ledger_state").upsert({user_id:user.id,data:S,updated_at:new Date().toISOString()});
+ stat(error?"⚠ فشل الحفظ":"تم الحفظ ✓");if(error)console.error(error)}
+const save=()=>{clearTimeout(tm);tm=setTimeout(push,500)};
+const uid=()=>S.seq++;
+const today=()=>new Date().toISOString().slice(0,10);
+const fmt=n=>(Math.round((n||0)*100)/100).toLocaleString("en-US");
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const nm=(a,id)=>esc((S[a].find(x=>x.id==id)||{}).name||"محذوف");
+let tab="home";
+const TABS=[["home","الرئيسية"],["inv","الفواتير"],["cus","العملاء"],["sup","الموردين"],["pur","المشتريات"]];
+
+function openM(h){$("#mb").innerHTML=h;$("#m").style.display="flex"}
+function closeM(){$("#m").style.display="none"}
+function ask(msg,cb){openM(`<p>${msg}</p><div class="row"><button class="pri dng" id="y">تأكيد الحذف</button><button onclick="closeM()">إلغاء</button></div>`);$("#y").onclick=()=>{cb();save();closeM();render()}}
+function form(t,fs,v,cb){
+ openM(`<h3>${t}</h3>`+fs.map(f=>`<label>${f.l}${f.t=="select"?`<select id="f_${f.k}">${f.o.map(o=>`<option value="${o[0]}">${esc(o[1])}</option>`).join("")}</select>`:`<input id="f_${f.k}" type="${f.t||"text"}" step="any" ${f.k=="product"?'list="pl"':""}>`}</label>`).join("")+`<div class="row"><button class="pri" id="ok">حفظ</button><button onclick="closeM()">إلغاء</button></div>`);
+ fs.forEach(f=>$("#f_"+f.k).value=v[f.k]??"");
+ $("#ok").onclick=()=>{const r={};for(const f of fs){let x=$("#f_"+f.k).value;if(f.t=="number")x=parseFloat(x)||0;if(f.r&&!x){$("#f_"+f.k).style.borderColor="var(--rd)";return}r[f.k]=x}cb(r);save();closeM();render()}
+}
+
+/* ---- calculations ---- */
+function stock(){
+ const p={};
+ S.pur.forEach(x=>{const o=p[x.product]||(p[x.product]={name:x.product,bought:0,cost:0,sold:0,last:0});o.bought+=x.qty;o.cost+=x.qty*x.price});
+ S.inv.forEach(v=>v.items.forEach(i=>{const o=p[i.product];if(!o)return;o.sold+=v.type=="sale"?i.qty:-i.qty;o.last=i.price}));
+ Object.values(p).forEach(o=>{o.avg=o.bought?o.cost/o.bought:0;o.q=o.bought-o.sold});
+ return p}
+function tot(v){const sub=v.items.reduce((a,i)=>a+i.qty*i.price,0);const disc=v.dt=="%"?sub*v.d/100:Math.min(v.d,sub);return{sub,disc,net:sub-disc}}
+const sg=v=>v.type=="sale"?1:-1;
+const cogs=(v,st)=>v.items.reduce((a,i)=>a+i.qty*((st[i.product]||{}).avg||0),0);
+const sum=(arr,f)=>arr.reduce((a,x)=>a+f(x),0);
+const custBal=id=>sum(S.inv.filter(v=>v.cid==id),v=>sg(v)*tot(v).net-(v.paid||0))-sum(S.pay.filter(p=>p.t=="c"&&p.x==id),p=>p.amt);
+const supBal=id=>sum(S.pur.filter(x=>x.sid==id),x=>x.qty*x.price-(x.paid||0))-sum(S.pay.filter(p=>p.t=="s"&&p.x==id),p=>p.amt);
+const P={c:{a:"cus",n:"عميل",bal:custBal},s:{a:"sup",n:"مورد",bal:supBal}};
+
+/* ---- views ---- */
+function render(){
+ $("#nav").innerHTML=TABS.map(t=>`<button class="${t[0]==tab?"on":""}" onclick="tab='${t[0]}';render()">${t[1]}</button>`).join("");
+ const st=stock();
+ $("#pl").innerHTML=Object.keys(st).map(n=>`<option value="${esc(n)}">`).join("");
+ $("#v").innerHTML=({home,inv,cus:()=>party("c"),sup:()=>party("s"),pur})[tab](st)}
+
+function home(st){
+ const sales=S.inv.filter(v=>v.type=="sale"),rets=S.inv.filter(v=>v.type=="ret");
+ const sTot=sum(sales,v=>tot(v).net),rTot=sum(rets,v=>tot(v).net),disc=sum(sales,v=>tot(v).disc);
+ const profit=sum(S.inv,v=>sg(v)*(tot(v).net-cogs(v,st)));
+ const owed=sum(S.cus,c=>Math.max(0,custBal(c.id))),due=sum(S.sup,s=>Math.max(0,supBal(s.id)));
+ const sv=sum(Object.values(st),o=>Math.max(0,o.q)*o.avg);
+ const c=(l,v,x="")=>`<div class="c ${x}"><small>${l}</small><b>${fmt(v)}</b></div>`;
+ return `<div class="cards">${c("صافي الربح",profit,"big")}${c("إجمالي المبيعات",sTot)}${c("المرتجعات",rTot)}${c("الخصومات الممنوحة",disc)}${c("تكلفة البضاعة المباعة",sum(S.inv,v=>sg(v)*cogs(v,st)))}${c("مستحق عند العملاء",owed)}${c("مستحق للموردين",due)}${c("قيمة المخزون",sv)}</div>
+ <div class="bar"><h2>المخزون</h2></div>
+ <div class="w"><table><tr><th>المنتج</th><th>تم شراؤه</th><th>تم بيعه</th><th>المتاح</th><th>متوسط التكلفة</th><th>آخر سعر بيع</th></tr>
+ ${Object.values(st).map(o=>`<tr><td>${esc(o.name)}</td><td>${fmt(o.bought)}</td><td>${fmt(o.sold)}</td><td class="${o.q<=0?"neg":""}">${fmt(o.q)}</td><td>${fmt(o.avg)}</td><td>${o.last?fmt(o.last):"-"}</td></tr>`).join("")||`<tr><td colspan="6" id="toast">ابدأ بإضافة مورد ثم مشتريات منه</td></tr>`}</table></div>
+ <p class="mu">الربح = صافي البيع بعد الخصم − (الكمية × متوسط سعر الشراء). المرتجع بيتخصم من المبيعات والتكلفة وبيرجع للمخزون.</p>`}
+
+function party(k){
+ const{a,n,bal}=P[k];
+ return `<div class="bar"><h2>${k=="c"?"العملاء":"الموردين"}</h2><button class="pri" onclick="editP('${k}')">+ ${n} جديد</button></div>
+ <div class="w"><table><tr><th>الاسم</th><th>التليفون</th><th>${k=="c"?"عليه":"له"}</th><th></th></tr>
+ ${S[a].map(x=>{const b=bal(x.id);return `<tr><td>${esc(x.name)}</td><td>${esc(x.phone)}</td><td class="${b>0?"neg":"pos"}">${fmt(b)}</td><td><div class="a">${k=="c"?`<button onclick="stmt(${x.id})">كشف حساب</button>`:""}<button onclick="payP('${k}',${x.id})">${k=="c"?"تحصيل":"سداد"}</button><button onclick="editP('${k}',${x.id})">تعديل</button><button class="dng" onclick="delP('${k}',${x.id})">حذف</button></div></td></tr>`}).join("")||`<tr><td colspan="4" id="toast">لا يوجد</td></tr>`}</table></div>`}
+function editP(k,id){const o=S[P[k].a].find(x=>x.id==id)||{};
+ form((id?"تعديل ":"إضافة ")+P[k].n,[{k:"name",l:"الاسم",r:1},{k:"phone",l:"التليفون (للواتساب)"}],o,r=>{id?Object.assign(o,r):S[P[k].a].push({id:uid(),...r})})}
+function delP(k,id){const o=S[P[k].a].find(x=>x.id==id);
+ ask(`حذف ${P[k].n} «${esc(o.name)}» وكل حركاته؟`,()=>{S[P[k].a]=S[P[k].a].filter(x=>x.id!=id);
+  if(k=="c")S.inv=S.inv.filter(v=>v.cid!=id);else S.pur=S.pur.filter(v=>v.sid!=id);S.pay=S.pay.filter(p=>!(p.t==k&&p.x==id))})}
+function payP(k,id){form((k=="c"?"تحصيل دفعة من ":"سداد دفعة إلى ")+nm(P[k].a,id),[{k:"date",l:"التاريخ",t:"date"},{k:"amt",l:"المبلغ",t:"number",r:1},{k:"n",l:"ملاحظة"}],{date:today()},r=>S.pay.push({t:k,x:id,...r}))}
+
+function pur(){
+ return `<div class="bar"><h2>المشتريات من الموردين</h2><button class="pri" onclick="purForm()">+ شراء جديد</button></div>
+ <div class="w"><table><tr><th>التاريخ</th><th>المورد</th><th>المنتج</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th><th>المدفوع</th><th></th></tr>
+ ${[...S.pur].reverse().map(x=>`<tr><td>${x.date}</td><td>${nm("sup",x.sid)}</td><td>${esc(x.product)}</td><td>${fmt(x.qty)}</td><td>${fmt(x.price)}</td><td>${fmt(x.qty*x.price)}</td><td>${fmt(x.paid)}</td><td><div class="a"><button onclick="purForm(${x.id})">تعديل</button><button class="dng" onclick="delPur(${x.id})">حذف</button></div></td></tr>`).join("")||`<tr><td colspan="8" id="toast">لا توجد مشتريات</td></tr>`}</table></div>`}
+function purForm(id){
+ if(!S.sup.length){openM(`<p>أضف مورد أولاً من تبويب الموردين.</p><button onclick="closeM()">حسناً</button>`);return}
+ const o=S.pur.find(x=>x.id==id)||{date:today(),sid:S.sup[0].id,qty:1,price:0,paid:0};
+ form(id?"تعديل عملية شراء":"شراء جديد",[{k:"date",l:"التاريخ",t:"date"},{k:"sid",l:"المورد",t:"select",o:S.sup.map(s=>[s.id,s.name])},{k:"product",l:"اسم المنتج",r:1},{k:"qty",l:"الكمية",t:"number",r:1},{k:"price",l:"سعر شراء الوحدة",t:"number",r:1},{k:"paid",l:"المدفوع للمورد",t:"number"}],o,r=>{r.sid=+r.sid;r.product=r.product.trim();id?Object.assign(o,r):S.pur.push({id:uid(),...r})})}
+function delPur(id){ask("حذف عملية الشراء دي؟",()=>{S.pur=S.pur.filter(x=>x.id!=id)})}
+
+function inv(st){
+ return `<div class="bar"><h2>الفواتير</h2><button class="pri" onclick="invForm()">+ فاتورة جديدة</button></div>
+ <div class="w"><table><tr><th>#</th><th>التاريخ</th><th>العميل</th><th>النوع</th><th>الإجمالي</th><th>الخصم</th><th>الصافي</th><th>المدفوع</th><th>الربح</th><th></th></tr>
+ ${[...S.inv].reverse().map(v=>{const t=tot(v),p=sg(v)*(t.net-cogs(v,st));return `<tr><td>${v.no}</td><td>${v.date}</td><td>${nm("cus",v.cid)}</td><td class="${v.type=="ret"?"neg":""}">${v.type=="ret"?"مرتجع":"بيع"}</td><td>${fmt(t.sub)}</td><td>${fmt(t.disc)}</td><td>${fmt(t.net)}</td><td>${fmt(v.paid)}</td><td class="${p<0?"neg":"pos"}">${fmt(p)}</td><td><div class="a"><button onclick="invForm(${v.id})">تعديل</button><button class="dng" onclick="delInv(${v.id})">حذف</button></div></td></tr>`}).join("")||`<tr><td colspan="10" id="toast">لا توجد فواتير</td></tr>`}</table></div>`}
+function delInv(id){ask("حذف الفاتورة دي؟",()=>{S.inv=S.inv.filter(v=>v.id!=id)})}
+
+function invForm(id){
+ const old=S.inv.find(x=>x.id==id),st=stock();
+ if(!S.cus.length||!Object.keys(st).length){openM(`<p>لازم تضيف عميل وتسجل مشتريات (منتجات) الأول.</p><button onclick="closeM()">حسناً</button>`);return}
+ const names=[...new Set([...Object.keys(st),...(old?old.items.map(i=>i.product):[])])];
+ const v=old?JSON.parse(JSON.stringify(old)):{type:"sale",date:today(),cid:S.cus[0].id,items:[{product:names[0],qty:1,price:st[names[0]].last||0}],d:0,dt:"$",paid:0};
+ const rows=()=>{$("#its").innerHTML=`<div class="g4 mu"><span>الصنف</span><span>الكمية</span><span>السعر</span><span></span></div>`+v.items.map((i,n)=>`<div class="it g4"><select onchange="pc(this)">${names.map(x=>`<option value="${esc(x)}" ${x==i.product?"selected":""}>${esc(x)}${st[x]?" (متاح "+fmt(st[x].q)+")":""}</option>`).join("")}</select><input class="q" type="number" step="any" value="${i.qty}"><input class="p" type="number" step="any" value="${i.price}"><button class="dng" onclick="rm(${n})">✕</button></div>`).join("")};
+ const sync=()=>{v.cid=+$("#i_c").value;v.type=$("#i_t").value;v.date=$("#i_d").value;v.d=+$("#i_ds").value||0;v.dt=$("#i_dt").value;v.paid=+$("#i_p").value||0;
+  v.items=[...document.querySelectorAll(".it")].map(r=>({product:r.querySelector("select").value,qty:+r.querySelector(".q").value||0,price:+r.querySelector(".p").value||0}))};
+ const upd=()=>{sync();const t=tot(v);$("#pw").style.display=v.type=="ret"?"none":"";
+  const bad=v.type=="sale"?v.items.filter(i=>st[i.product]&&i.qty>st[i.product].q+(old&&old.type=="sale"?old.items.filter(o=>o.product==i.product).reduce((a,o)=>a+o.qty,0):0)).map(i=>i.product):[];
+  $("#tot").innerHTML=`<div><span>الإجمالي</span><b>${fmt(t.sub)}</b></div><div><span>الخصم</span><b>${fmt(t.disc)}</b></div><div><span>الصافي</span><b>${fmt(t.net)}</b></div>${v.type=="sale"?`<div><span>المتبقي على العميل</span><b>${fmt(t.net-v.paid)}</b></div>`:""}${bad.length?`<div class="warn">تنبيه: الكمية أكبر من المتاح في ${bad.map(esc).join("، ")}</div>`:""}`};
+ window.pc=s=>{const r=s.closest(".it");r.querySelector(".p").value=(st[s.value]||{}).last||0;upd()};
+ window.rm=n=>{sync();if(v.items.length>1)v.items.splice(n,1);rows();upd()};
+ openM(`<h3>${old?"تعديل فاتورة #"+old.no:"فاتورة جديدة"}</h3><div class="g3"><label>العميل<select id="i_c">${S.cus.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select></label><label>النوع<select id="i_t"><option value="sale">بيع</option><option value="ret">مرتجع</option></select></label><label>التاريخ<input type="date" id="i_d"></label></div><div id="its"></div><button id="add">+ إضافة صنف</button><div class="g3" style="margin-top:10px"><label>الخصم<input type="number" step="any" id="i_ds"></label><label>نوع الخصم<select id="i_dt"><option value="$">مبلغ</option><option value="%">نسبة %</option></select></label><label id="pw">المدفوع<input type="number" step="any" id="i_p"></label></div><div class="tot" id="tot"></div><div class="row"><button class="pri" id="ok">حفظ الفاتورة</button><button onclick="closeM()">إلغاء</button></div>`);
+ $("#i_c").value=v.cid;$("#i_t").value=v.type;$("#i_d").value=v.date;$("#i_ds").value=v.d||"";$("#i_dt").value=v.dt;$("#i_p").value=v.paid||"";
+ rows();upd();
+ $("#mb").oninput=upd;$("#mb").onchange=upd;
+ $("#add").onclick=()=>{sync();v.items.push({product:names[0],qty:1,price:st[names[0]].last||0});rows();upd()};
+ $("#ok").onclick=()=>{sync();v.items=v.items.filter(i=>i.qty>0&&i.product);if(!v.items.length)return;if(v.type=="ret")v.paid=0;
+  if(old)Object.assign(old,v);else S.inv.push({id:uid(),no:Math.max(0,...S.inv.map(x=>x.no))+1,...v});
+  save();closeM();render()}}
+
+/* ---- customer statement ---- */
+function stmt(cid){
+ const c=S.cus.find(x=>x.id==cid),rows=[];
+ S.inv.filter(v=>v.cid==cid).forEach(v=>{const t=tot(v);
+  rows.push({d:v.date,t:(v.type=="sale"?"فاتورة بيع #":"مرتجع فاتورة #")+v.no+(t.disc?" (بعد خصم "+fmt(t.disc)+")":""),db:v.type=="sale"?t.net:0,cr:v.type=="ret"?t.net:0});
+  if(v.paid)rows.push({d:v.date,t:"مدفوع على فاتورة #"+v.no,db:0,cr:v.paid})});
+ S.pay.filter(p=>p.t=="c"&&p.x==cid).forEach(p=>rows.push({d:p.date,t:"دفعة"+(p.n?" - "+p.n:""),db:0,cr:p.amt}));
+ rows.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
+ let b=0;rows.forEach(r=>{b+=r.db-r.cr;r.b=b});
+ let txt=`كشف حساب: ${c.name}\nالتاريخ: ${today()}\n\n`+rows.map(r=>`${r.d} | ${r.t} | ${r.db?"مدين "+fmt(r.db):"دائن "+fmt(r.cr)} | الرصيد ${fmt(r.b)}`).join("\n")+`\n\nالرصيد المستحق: ${fmt(b)} ج.م`;
+ let ph=(c.phone||"").replace(/\D/g,"");if(ph.startsWith("0"))ph="2"+ph;
+ openM(`<h3>كشف حساب: ${esc(c.name)}</h3><div class="w"><table><tr><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr>${rows.map(r=>`<tr><td>${r.d}</td><td>${esc(r.t)}</td><td>${r.db?fmt(r.db):""}</td><td>${r.cr?fmt(r.cr):""}</td><td>${fmt(r.b)}</td></tr>`).join("")||`<tr><td colspan="5">لا توجد حركات</td></tr>`}</table></div><h3 class="${b>0?"neg":"pos"}">الرصيد المستحق: ${fmt(b)} ج.م</h3><div class="row noprint"><a href="https://wa.me/${ph}?text=${encodeURIComponent(txt)}" target="_blank" rel="noopener"><button class="pri">إرسال واتساب</button></a><button id="cp">نسخ النص</button><button onclick="window.print()">طباعة / PDF</button><button onclick="closeM()">إغلاق</button></div>`);
+ $("#cp").onclick=()=>{try{navigator.clipboard.writeText(txt);$("#cp").textContent="تم النسخ ✓"}catch(e){}}}
+function loginView(msg){
+ $("#nav").innerHTML="";
+ $("#v").innerHTML=`<div class="box" style="margin:30px auto"><h3>تسجيل الدخول</h3><label>البريد الإلكتروني<input id="em" type="email" autocomplete="email"></label><label>كلمة المرور (6 أحرف على الأقل)<input id="pw" type="password" autocomplete="current-password"></label><p class="warn" id="er">${msg||""}</p><div class="row"><button class="pri" id="li">دخول</button><button id="su">إنشاء حساب</button></div></div>`;
+ const go=async up=>{const c={email:$("#em").value.trim(),password:$("#pw").value};
+  const{data,error}=up?await sb.auth.signUp(c):await sb.auth.signInWithPassword(c);
+  if(error)return $("#er").textContent=error.message;
+  if(up&&!data.session)return $("#er").textContent="تم إنشاء الحساب. افتح بريدك لتأكيده ثم سجل الدخول.";
+  boot()};
+ $("#li").onclick=()=>go(0);$("#su").onclick=()=>go(1)}
+async function boot(){
+ if(!sb){$("#v").innerHTML='<div class="box" style="margin:30px auto">لم يتم ضبط Supabase. عدّل ملف config.js بالرابط والمفتاح.</div>';return}
+ const{data:{session}}=await sb.auth.getSession();
+ if(!session)return loginView();
+ user=session.user;$("#lo").style.display="";
+ const{data,error}=await sb.from("ledger_state").select("data").eq("user_id",user.id).maybeSingle();
+ if(error){$("#v").innerHTML='<div class="box" style="margin:30px auto">خطأ في الاتصال: '+esc(error.message)+'<br>تأكد من تشغيل ملف supabase.sql</div>';return}
+ if(data&&data.data&&data.data.seq)S=data.data;
+ stat("متصل ✓");render()}
+boot();
+</script>
+</body>
+</html>
