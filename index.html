@@ -74,7 +74,7 @@ const nm=(a,id)=>esc((S[a].find(x=>x.id==id)||{}).name||"محذوف");
 let tab="home";
 const TABS=[["home","الرئيسية"],["inv","الفواتير"],["cus","العملاء"],["sup","الموردين"],["pur","المشتريات"]];
 
-function openM(h){$("#mb").innerHTML=h;$("#m").style.display="flex"}
+function openM(h){$("#mb").oninput=null;$("#mb").onchange=null;$("#mb").innerHTML=h;$("#m").style.display="flex"}
 function closeM(){$("#m").style.display="none"}
 function ask(msg,cb){openM(`<p>${msg}</p><div class="row"><button class="pri dng" id="y">تأكيد الحذف</button><button onclick="closeM()">إلغاء</button></div>`);$("#y").onclick=()=>{cb();save();closeM();render()}}
 function form(t,fs,v,cb){
@@ -86,16 +86,18 @@ function form(t,fs,v,cb){
 /* ---- calculations ---- */
 function stock(){
  const p={};
- S.pur.forEach(x=>{const o=p[x.product]||(p[x.product]={name:x.product,bought:0,cost:0,sold:0,last:0});o.bought+=x.qty;o.cost+=x.qty*x.price});
+ S.pur.forEach(x=>x.items.forEach(i=>{const o=p[i.product]||(p[i.product]={name:i.product,bought:0,cost:0,sold:0,last:0});o.bought+=i.qty;o.cost+=i.qty*i.price}));
  S.inv.forEach(v=>v.items.forEach(i=>{const o=p[i.product];if(!o)return;o.sold+=v.type=="sale"?i.qty:-i.qty;o.last=i.price}));
  Object.values(p).forEach(o=>{o.avg=o.bought?o.cost/o.bought:0;o.q=o.bought-o.sold});
  return p}
-function tot(v){const sub=v.items.reduce((a,i)=>a+i.qty*i.price,0);const disc=v.dt=="%"?sub*v.d/100:Math.min(v.d,sub);return{sub,disc,net:sub-disc}}
+function tot(v){const sub=v.items.reduce((a,i)=>a+i.qty*i.price,0);const disc=v.dt=="%"?sub*Math.min(v.d,100)/100:Math.min(v.d,sub);return{sub,disc,net:sub-disc}}
 const sg=v=>v.type=="sale"?1:-1;
 const cogs=(v,st)=>v.items.reduce((a,i)=>a+i.qty*((st[i.product]||{}).avg||0),0);
 const sum=(arr,f)=>arr.reduce((a,x)=>a+f(x),0);
-const custBal=id=>sum(S.inv.filter(v=>v.cid==id),v=>sg(v)*tot(v).net-(v.paid||0))-sum(S.pay.filter(p=>p.t=="c"&&p.x==id),p=>p.amt);
-const supBal=id=>sum(S.pur.filter(x=>x.sid==id),x=>x.qty*x.price-(x.paid||0))-sum(S.pay.filter(p=>p.t=="s"&&p.x==id),p=>p.amt);
+const pTot=x=>sum(x.items,i=>i.qty*i.price);
+const ob=(a,id)=>+((S[a].find(c=>c.id==id)||{}).ob)||0;
+const custBal=id=>ob("cus",id)+sum(S.inv.filter(v=>v.cid==id),v=>sg(v)*tot(v).net-(v.paid||0))-sum(S.pay.filter(p=>p.t=="c"&&p.x==id),p=>p.amt);
+const supBal=id=>ob("sup",id)+sum(S.pur.filter(x=>x.sid==id),x=>pTot(x)-(x.paid||0))-sum(S.pay.filter(p=>p.t=="s"&&p.x==id),p=>p.amt);
 const P={c:{a:"cus",n:"عميل",bal:custBal},s:{a:"sup",n:"مورد",bal:supBal}};
 
 /* ---- views ---- */
@@ -122,23 +124,38 @@ function party(k){
  const{a,n,bal}=P[k];
  return `<div class="bar"><h2>${k=="c"?"العملاء":"الموردين"}</h2><button class="pri" onclick="editP('${k}')">+ ${n} جديد</button></div>
  <div class="w"><table><tr><th>الاسم</th><th>التليفون</th><th>${k=="c"?"عليه":"له"}</th><th></th></tr>
- ${S[a].map(x=>{const b=bal(x.id);return `<tr><td>${esc(x.name)}</td><td>${esc(x.phone)}</td><td class="${b>0?"neg":"pos"}">${fmt(b)}</td><td><div class="a">${k=="c"?`<button onclick="stmt(${x.id})">كشف حساب</button>`:""}<button onclick="payP('${k}',${x.id})">${k=="c"?"تحصيل":"سداد"}</button><button onclick="editP('${k}',${x.id})">تعديل</button><button class="dng" onclick="delP('${k}',${x.id})">حذف</button></div></td></tr>`}).join("")||`<tr><td colspan="4" id="toast">لا يوجد</td></tr>`}</table></div>`}
+ ${S[a].map(x=>{const b=bal(x.id);return `<tr><td>${esc(x.name)}</td><td>${esc(x.phone)}</td><td class="${b>0?"neg":"pos"}">${fmt(b)}</td><td><div class="a"><button onclick="stmt('${k}',${x.id})">كشف حساب</button><button onclick="payP('${k}',${x.id})">${k=="c"?"تحصيل":"سداد"}</button><button onclick="editP('${k}',${x.id})">تعديل</button><button class="dng" onclick="delP('${k}',${x.id})">حذف</button></div></td></tr>`}).join("")||`<tr><td colspan="4" id="toast">لا يوجد</td></tr>`}</table></div>`}
 function editP(k,id){const o=S[P[k].a].find(x=>x.id==id)||{};
- form((id?"تعديل ":"إضافة ")+P[k].n,[{k:"name",l:"الاسم",r:1},{k:"phone",l:"التليفون (للواتساب)"}],o,r=>{id?Object.assign(o,r):S[P[k].a].push({id:uid(),...r})})}
+ form((id?"تعديل ":"إضافة ")+P[k].n,[{k:"name",l:"الاسم",r:1},{k:"phone",l:"التليفون (للواتساب)"},{k:"ob",l:k=="c"?"رصيد أول المدة (مبلغ مستحق على العميل)":"رصيد أول المدة (مبلغ مستحق للمورد)",t:"number"}],o,r=>{id?Object.assign(o,r):S[P[k].a].push({id:uid(),...r})})}
 function delP(k,id){const o=S[P[k].a].find(x=>x.id==id);
  ask(`حذف ${P[k].n} «${esc(o.name)}» وكل حركاته؟`,()=>{S[P[k].a]=S[P[k].a].filter(x=>x.id!=id);
   if(k=="c")S.inv=S.inv.filter(v=>v.cid!=id);else S.pur=S.pur.filter(v=>v.sid!=id);S.pay=S.pay.filter(p=>!(p.t==k&&p.x==id))})}
 function payP(k,id){form((k=="c"?"تحصيل دفعة من ":"سداد دفعة إلى ")+nm(P[k].a,id),[{k:"date",l:"التاريخ",t:"date"},{k:"amt",l:"المبلغ",t:"number",r:1},{k:"n",l:"ملاحظة"}],{date:today()},r=>S.pay.push({t:k,x:id,...r}))}
 
 function pur(){
- return `<div class="bar"><h2>المشتريات من الموردين</h2><button class="pri" onclick="purForm()">+ شراء جديد</button></div>
- <div class="w"><table><tr><th>التاريخ</th><th>المورد</th><th>المنتج</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th><th>المدفوع</th><th></th></tr>
- ${[...S.pur].reverse().map(x=>`<tr><td>${x.date}</td><td>${nm("sup",x.sid)}</td><td>${esc(x.product)}</td><td>${fmt(x.qty)}</td><td>${fmt(x.price)}</td><td>${fmt(x.qty*x.price)}</td><td>${fmt(x.paid)}</td><td><div class="a"><button onclick="purForm(${x.id})">تعديل</button><button class="dng" onclick="delPur(${x.id})">حذف</button></div></td></tr>`).join("")||`<tr><td colspan="8" id="toast">لا توجد مشتريات</td></tr>`}</table></div>`}
-function purForm(id){
- if(!S.sup.length){openM(`<p>أضف مورد أولاً من تبويب الموردين.</p><button onclick="closeM()">حسناً</button>`);return}
- const o=S.pur.find(x=>x.id==id)||{date:today(),sid:S.sup[0].id,qty:1,price:0,paid:0};
- form(id?"تعديل عملية شراء":"شراء جديد",[{k:"date",l:"التاريخ",t:"date"},{k:"sid",l:"المورد",t:"select",o:S.sup.map(s=>[s.id,s.name])},{k:"product",l:"اسم المنتج",r:1},{k:"qty",l:"الكمية",t:"number",r:1},{k:"price",l:"سعر شراء الوحدة",t:"number",r:1},{k:"paid",l:"المدفوع للمورد",t:"number"}],o,r=>{r.sid=+r.sid;r.product=r.product.trim();id?Object.assign(o,r):S.pur.push({id:uid(),...r})})}
-function delPur(id){ask("حذف عملية الشراء دي؟",()=>{S.pur=S.pur.filter(x=>x.id!=id)})}
+ return `<div class="bar"><h2>المشتريات من الموردين</h2><div class="a"><button onclick="purForm(0,1)">+ مخزون أول المدة</button><button class="pri" onclick="purForm()">+ فاتورة شراء</button></div></div>
+ <div class="w"><table><tr><th>#</th><th>التاريخ</th><th>المورد</th><th>الأصناف</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th><th></th></tr>
+ ${[...S.pur].reverse().map(x=>{const t=pTot(x);return `<tr><td>${x.no}</td><td>${x.date}</td><td>${x.sid?nm("sup",x.sid):"رصيد افتتاحي"}</td><td style="white-space:normal;min-width:160px">${x.items.map(i=>esc(i.product)+" × "+fmt(i.qty)).join("، ")}</td><td>${fmt(t)}</td><td>${fmt(x.paid)}</td><td>${fmt(t-x.paid)}</td><td><div class="a"><button onclick="purForm(${x.id})">تعديل</button><button class="dng" onclick="delPur(${x.id})">حذف</button></div></td></tr>`}).join("")||`<tr><td colspan="8" id="toast">لا توجد مشتريات</td></tr>`}</table></div>`}
+function delPur(id){ask("حذف فاتورة الشراء دي؟",()=>{S.pur=S.pur.filter(x=>x.id!=id)})}
+function purForm(id,op){
+ const old=S.pur.find(x=>x.id==id);
+ if(!S.sup.length&&!op&&!(old&&!old.sid)){openM(`<p>أضف مورد أولاً من تبويب الموردين.</p><button onclick="closeM()">حسناً</button>`);return}
+ const v=old?JSON.parse(JSON.stringify(old)):{date:today(),sid:op?0:S.sup[0].id,items:[{product:"",qty:1,price:0}],paid:0};
+ const opening=!v.sid;
+ const opts=opening?`<option value="0">رصيد افتتاحي (بدون مورد)</option>`:S.sup.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("");
+ const rows=()=>{$("#its").innerHTML=`<div class="g4 mu"><span>المنتج</span><span>الكمية</span><span>سعر الشراء</span><span></span></div>`+v.items.map((i,n)=>`<div class="it g4"><input class="n" list="pl" value="${esc(i.product)}" placeholder="اسم المنتج"><input class="q" type="number" step="any" value="${i.qty}"><input class="p" type="number" step="any" value="${i.price||""}"><button class="dng" onclick="rm(${n})">✕</button></div>`).join("")};
+ const sync=()=>{v.sid=+$("#i_s").value;v.date=$("#i_d").value;v.paid=+$("#i_p").value||0;v.items=[...document.querySelectorAll(".it")].map(r=>({product:r.querySelector(".n").value.trim(),qty:+r.querySelector(".q").value||0,price:+r.querySelector(".p").value||0}))};
+ const upd=()=>{sync();const t=pTot(v);$("#pw").style.display=opening?"none":"";$("#tot").innerHTML=`<div><span>الإجمالي</span><b>${fmt(t)}</b></div>`+(opening?"":`<div><span>المتبقي للمورد</span><b>${fmt(t-v.paid)}</b></div>`)};
+ window.rm=n=>{sync();if(v.items.length>1)v.items.splice(n,1);rows();upd()};
+ openM(`<h3>${opening?"مخزون أول المدة":old?"تعديل فاتورة شراء #"+old.no:"فاتورة شراء جديدة"}</h3><div class="g3"><label>المورد<select id="i_s">${opts}</select></label><label>التاريخ<input type="date" id="i_d"></label><label id="pw">المدفوع للمورد<input type="number" step="any" id="i_p"></label></div><div id="its"></div><button id="add">+ إضافة صنف</button><div class="tot" id="tot"></div><p class="warn" id="er"></p><div class="row"><button class="pri" id="ok">حفظ</button><button onclick="closeM()">إلغاء</button></div>`);
+ $("#i_s").value=v.sid;$("#i_d").value=v.date;$("#i_p").value=v.paid||"";
+ rows();upd();$("#mb").oninput=upd;
+ $("#add").onclick=()=>{sync();v.items.push({product:"",qty:1,price:0});rows();upd()};
+ $("#ok").onclick=()=>{sync();v.items=v.items.filter(i=>i.product&&i.qty>0);
+  if(!v.items.length){$("#er").textContent="أضف صنفاً واحداً على الأقل (الاسم والكمية)";return}
+  if(!v.sid)v.paid=pTot(v);
+  if(old)Object.assign(old,v);else S.pur.push({id:uid(),no:Math.max(0,...S.pur.map(x=>x.no||0))+1,...v});
+  save();closeM();render()}}
 
 function inv(st){
  return `<div class="bar"><h2>الفواتير</h2><button class="pri" onclick="invForm()">+ فاتورة جديدة</button></div>
@@ -168,18 +185,22 @@ function invForm(id){
   if(old)Object.assign(old,v);else S.inv.push({id:uid(),no:Math.max(0,...S.inv.map(x=>x.no))+1,...v});
   save();closeM();render()}}
 
-/* ---- customer statement ---- */
-function stmt(cid){
- const c=S.cus.find(x=>x.id==cid),rows=[];
- S.inv.filter(v=>v.cid==cid).forEach(v=>{const t=tot(v);
+/* ---- statements (customers + suppliers) ---- */
+function stmt(k,id){
+ const cu=k=="c",c=S[P[k].a].find(x=>x.id==id),rows=[];
+ if(cu){S.inv.filter(v=>v.cid==id).forEach(v=>{const t=tot(v);
   rows.push({d:v.date,t:(v.type=="sale"?"فاتورة بيع #":"مرتجع فاتورة #")+v.no+(t.disc?" (بعد خصم "+fmt(t.disc)+")":""),db:v.type=="sale"?t.net:0,cr:v.type=="ret"?t.net:0});
-  if(v.paid)rows.push({d:v.date,t:"مدفوع على فاتورة #"+v.no,db:0,cr:v.paid})});
- S.pay.filter(p=>p.t=="c"&&p.x==cid).forEach(p=>rows.push({d:p.date,t:"دفعة"+(p.n?" - "+p.n:""),db:0,cr:p.amt}));
+  if(v.paid)rows.push({d:v.date,t:"مدفوع على فاتورة #"+v.no,db:0,cr:v.paid})})}
+ else S.pur.filter(x=>x.sid==id).forEach(x=>{rows.push({d:x.date,t:"فاتورة شراء #"+x.no+" ("+x.items.map(i=>i.product+" × "+fmt(i.qty)).join("، ")+")",db:pTot(x),cr:0});
+  if(x.paid)rows.push({d:x.date,t:"مدفوع على فاتورة #"+x.no,db:0,cr:x.paid})});
+ S.pay.filter(p=>p.t==k&&p.x==id).forEach(p=>rows.push({d:p.date,t:(cu?"دفعة محصلة":"دفعة مسددة")+(p.n?" - "+p.n:""),db:0,cr:p.amt}));
  rows.sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
- let b=0;rows.forEach(r=>{b+=r.db-r.cr;r.b=b});
- let txt=`كشف حساب: ${c.name}\nالتاريخ: ${today()}\n\n`+rows.map(r=>`${r.d} | ${r.t} | ${r.db?"مدين "+fmt(r.db):"دائن "+fmt(r.cr)} | الرصيد ${fmt(r.b)}`).join("\n")+`\n\nالرصيد المستحق: ${fmt(b)} ج.م`;
+ let b=+c.ob||0;const o=b;rows.forEach(r=>{b+=r.db-r.cr;r.b=b});
+ if(o)rows.unshift({d:"",t:"رصيد أول المدة",db:0,cr:0,b:o});
+ const H=cu?["مدين","دائن"]:["مشتريات","مدفوع"],L=cu?"الرصيد المستحق على العميل":"الرصيد المستحق للمورد";
+ const txt=`كشف حساب: ${c.name}\nالتاريخ: ${today()}\n\n`+rows.map(r=>`${r.d} | ${r.t} | ${r.db?H[0]+" "+fmt(r.db):r.cr?H[1]+" "+fmt(r.cr):""} | الرصيد ${fmt(r.b)}`).join("\n")+`\n\n${L}: ${fmt(b)} ج.م`;
  let ph=(c.phone||"").replace(/\D/g,"");if(ph.startsWith("0"))ph="2"+ph;
- openM(`<h3>كشف حساب: ${esc(c.name)}</h3><div class="w"><table><tr><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr>${rows.map(r=>`<tr><td>${r.d}</td><td>${esc(r.t)}</td><td>${r.db?fmt(r.db):""}</td><td>${r.cr?fmt(r.cr):""}</td><td>${fmt(r.b)}</td></tr>`).join("")||`<tr><td colspan="5">لا توجد حركات</td></tr>`}</table></div><h3 class="${b>0?"neg":"pos"}">الرصيد المستحق: ${fmt(b)} ج.م</h3><div class="row noprint"><a href="https://wa.me/${ph}?text=${encodeURIComponent(txt)}" target="_blank" rel="noopener"><button class="pri">إرسال واتساب</button></a><button id="cp">نسخ النص</button><button onclick="window.print()">طباعة / PDF</button><button onclick="closeM()">إغلاق</button></div>`);
+ openM(`<h3>كشف حساب: ${esc(c.name)}</h3><div class="w"><table><tr><th>التاريخ</th><th>البيان</th><th>${H[0]}</th><th>${H[1]}</th><th>الرصيد</th></tr>${rows.map(r=>`<tr><td>${r.d}</td><td style="white-space:normal">${esc(r.t)}</td><td>${r.db?fmt(r.db):""}</td><td>${r.cr?fmt(r.cr):""}</td><td>${fmt(r.b)}</td></tr>`).join("")||`<tr><td colspan="5">لا توجد حركات</td></tr>`}</table></div><h3 class="${b>0?"neg":"pos"}">${L}: ${fmt(b)} ج.م</h3><div class="row noprint"><a href="https://wa.me/${ph}?text=${encodeURIComponent(txt)}" target="_blank" rel="noopener"><button class="pri">إرسال واتساب</button></a><button id="cp">نسخ النص</button><button onclick="window.print()">طباعة / PDF</button><button onclick="closeM()">إغلاق</button></div>`);
  $("#cp").onclick=()=>{try{navigator.clipboard.writeText(txt);$("#cp").textContent="تم النسخ ✓"}catch(e){}}}
 function loginView(msg){
  $("#nav").innerHTML="";
@@ -198,6 +219,7 @@ async function boot(){
  const{data,error}=await sb.from("ledger_state").select("data").eq("user_id",user.id).maybeSingle();
  if(error){$("#v").innerHTML='<div class="box" style="margin:30px auto">خطأ في الاتصال: '+esc(error.message)+'<br>تأكد من تشغيل ملف supabase.sql</div>';return}
  if(data&&data.data&&data.data.seq)S=data.data;
+ S.pur.forEach((x,i)=>{if(!x.items){x.items=[{product:x.product,qty:x.qty,price:x.price}];delete x.product;delete x.qty;delete x.price}if(!x.no)x.no=i+1;x.paid=x.paid||0});
  stat("متصل ✓");render()}
 boot();
 </script>
